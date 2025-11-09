@@ -154,6 +154,9 @@ export type LammpsOutput = {
 export interface LammpsModuleOptions {
   print?: (msg: string) => void;
   printErr?: (msg: string) => void;
+  locateFile?: (path: string, scriptDirectory?: string) => string;
+  wasmBinary?: ArrayBuffer | Uint8Array;
+  postStepCallback?: () => boolean;
 }
 
 export interface LammpsModule {
