@@ -43,6 +43,203 @@ console.log("Timesteps:", lammps.getTimesteps());
 lammps.step();
 ```
 
+## Web Worker Support
+
+For running LAMMPS in a background thread without blocking the main UI, use the Web Worker wrapper with SharedArrayBuffer support.
+
+### Quick Start with Workers
+
+```typescript
+import { LammpsWorker } from "lammps/worker";
+
+// Create a worker instance
+const lammps = await LammpsWorker.create({
+  workerUrl: './node_modules/lammps/dist/worker/worker-entry.js'
+});
+
+// Listen for log messages
+lammps.on('log', (msg) => console.log(msg));
+
+// Listen for step callbacks
+lammps.on('step', (timestep) => {
+  console.log('Current timestep:', timestep);
+  // Update UI here - main thread is not blocked!
+});
+
+// Run commands (async)
+await lammps.runScript(`
+  units lj
+  atom_style atomic
+  lattice fcc 0.8442
+  region box block 0 10 0 10 0 10
+  create_box 1 box
+  create_atoms 1 box
+`);
+
+// Zero-copy access to positions via SharedArrayBuffer
+await lammps.updatePositions();
+const positions = lammps.getPositions(); // Float64Array view into SAB
+
+console.log('First atom:', positions[0], positions[1], positions[2]);
+```
+
+### Benefits of Using Workers
+
+- **Non-blocking**: Simulations run in background thread, UI stays responsive
+- **Zero-copy data**: SharedArrayBuffer provides direct memory access to positions
+- **Event-based**: Stream logs and receive callbacks without polling
+- **Full API**: All LAMMPS commands available through async interface
+
+### Requirements
+
+SharedArrayBuffer requires specific HTTP headers. Use the included server:
+
+```bash
+npm run serve
+```
+
+Or set these headers on your server:
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+### Worker API
+
+#### Creating a Worker
+
+```typescript
+const lammps = await LammpsWorker.create({
+  workerUrl?: string,        // Path to worker script
+  initialCapacity?: number,  // Initial atom capacity (default: 100000)
+  print?: (msg: string) => void,
+  printErr?: (msg: string) => void
+});
+```
+
+#### Event Listeners
+
+```typescript
+// Log messages from LAMMPS
+lammps.on('log', (message: string) => {
+  console.log('LAMMPS:', message);
+});
+
+// Error messages
+lammps.on('error', (message: string) => {
+  console.error('Error:', message);
+});
+
+// Step callbacks
+lammps.on('step', (timestep: number) => {
+  updateProgressBar(timestep);
+});
+```
+
+#### Async Commands
+
+All commands return Promises:
+
+```typescript
+await lammps.runScript('run 1000');
+await lammps.step();
+await lammps.pause();
+await lammps.resume();
+await lammps.cancel();
+```
+
+#### Zero-Copy Data Access
+
+```typescript
+// Request position update
+await lammps.updatePositions();
+
+// Get direct view into SharedArrayBuffer
+const positions = lammps.getPositions(); // Float64Array
+
+// No copying! Direct access to atom positions
+for (let i = 0; i < lammps.getNumAtoms(); i++) {
+  const x = positions[i * 3 + 0];
+  const y = positions[i * 3 + 1];
+  const z = positions[i * 3 + 2];
+  // Render atom at (x, y, z)
+}
+```
+
+#### Real-time Metadata
+
+Access atom count and timestep from SharedArrayBuffer (no async needed):
+
+```typescript
+const numAtoms = lammps.getNumAtoms();     // Instant access
+const timestep = lammps.getTimesteps();    // Instant access
+```
+
+### Complete Worker Example
+
+```typescript
+import { LammpsWorker } from "lammps/worker";
+
+async function runSimulation() {
+  // Create worker
+  const lammps = await LammpsWorker.create();
+  
+  // Set up event handlers
+  lammps.on('log', (msg) => console.log(msg));
+  lammps.on('step', (timestep) => {
+    document.getElementById('progress').textContent = 
+      `Step ${timestep}/${totalSteps}`;
+  });
+  
+  // Run simulation
+  await lammps.runScript(`
+    units lj
+    atom_style atomic
+    lattice fcc 0.8442
+    region box block 0 20 0 20 0 20
+    create_box 1 box
+    create_atoms 1 box
+    mass 1 1.0
+    velocity all create 1.0 87287
+    pair_style lj/cut 2.5
+    pair_coeff 1 1 1.0 1.0 2.5
+    fix 1 all nve
+    
+    run 10000
+  `);
+  
+  // Get final positions
+  await lammps.updatePositions();
+  const positions = lammps.getPositions();
+  
+  console.log('Simulation complete!');
+  console.log('Total atoms:', lammps.getNumAtoms());
+  console.log('Final timestep:', lammps.getTimesteps());
+  
+  // Cleanup
+  lammps.terminate();
+}
+
+runSimulation();
+```
+
+### Pause/Resume Support
+
+The worker supports synchronous pause/resume using atomic operations:
+
+```typescript
+// Start long simulation
+const simulationPromise = lammps.runScript('run 100000');
+
+// Pause after 2 seconds
+setTimeout(() => lammps.pause(), 2000);
+
+// Resume after 4 seconds  
+setTimeout(() => lammps.resume(), 4000);
+
+await simulationPromise;
+```
+
 ## API Reference
 
 ### LammpsWeb

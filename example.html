@@ -43,6 +43,19 @@
   <h1>🧪 LAMMPS WASM Example</h1>
   <p>Simple LJ simulation running in your browser</p>
   
+  <div style="margin: 20px 0;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px;">
+      <div>
+        <label for="boxSize" style="display: block; margin-bottom: 5px; font-weight: bold;">Box Size (unit cells per dimension):</label>
+        <input type="number" id="boxSize" value="10" min="1" max="50" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+      </div>
+      <div>
+        <label for="timesteps" style="display: block; margin-bottom: 5px; font-weight: bold;">Number of Timesteps:</label>
+        <input type="number" id="timesteps" value="100" min="1" max="100000" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+      </div>
+    </div>
+  </div>
+  
   <div>
     <button id="runBtn">Run Simulation</button>
     <button id="pauseBtn" disabled>Pause</button>
@@ -57,6 +70,8 @@
     const outputDiv = document.getElementById('output');
     const runBtn = document.getElementById('runBtn');
     const pauseBtn = document.getElementById('pauseBtn');
+    const boxSizeInput = document.getElementById('boxSize');
+    const timestepsInput = document.getElementById('timesteps');
     
     let isPaused = false;
     
@@ -73,8 +88,14 @@
     }
 
     runBtn.addEventListener('click', async () => {
+      // Get user input values
+      const boxSize = parseInt(boxSizeInput.value);
+      const numTimesteps = parseInt(timestepsInput.value);
+      
       runBtn.disabled = true;
       pauseBtn.disabled = false;
+      boxSizeInput.disabled = true;
+      timestepsInput.disabled = true;
       outputDiv.textContent = '';
       isPaused = false;
       pauseBtn.textContent = 'Pause';
@@ -96,12 +117,14 @@
 
         log('✅ LAMMPS initialized successfully\n');
         log('📝 Setting up simulation...');
+        log(`   Box size: ${boxSize}x${boxSize}x${boxSize} unit cells`);
+        log(`   Timesteps: ${numTimesteps}\n`);
         
         lammps.runScript(`
           units lj
           atom_style atomic
           lattice fcc 0.8442
-          region box block 0 20 0 20 0 20
+          region box block 0 ${boxSize} 0 ${boxSize} 0 ${boxSize}
           create_box 1 box
           create_atoms 1 box
           mass 1 1.0
@@ -110,9 +133,9 @@
         `);
 
         log(`\n✅ Created ${lammps.getNumAtoms()} atoms\n`);
-        log('🏃 Running 1000 timesteps... (try pausing!)');
+        log(`🏃 Running ${numTimesteps} timesteps... (try pausing!)`);
         
-        lammps.runScript('run 100');
+        lammps.runScript(`run ${numTimesteps}`);
 
         log('\n📊 Simulation Statistics:');
         log(`  Total atoms: ${lammps.getNumAtoms()}`);
@@ -126,6 +149,8 @@
       } finally {
         runBtn.disabled = false;
         pauseBtn.disabled = true;
+        boxSizeInput.disabled = false;
+        timestepsInput.disabled = false;
         pauseBtn.textContent = 'Pause';
         isPaused = false;
       }
