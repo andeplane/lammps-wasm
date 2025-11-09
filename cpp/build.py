@@ -242,14 +242,15 @@ if not os.path.exists('lammps'):
   copy_moltemplate_files()  # Custom pair styles
 
   cwd = os.getcwd()
-  print("Changing directory ...")
-  os.chdir('lammps/src')
   print("Applying patch ...")
   try:
-    subprocess.run("git apply lammps.patch", shell=True, check=True)
+    subprocess.run("cd lammps && git apply ../lammps.patch", shell=True, check=True)
   except subprocess.CalledProcessError as e:
     print(f"WARNING: Patch application failed with exit code {e.returncode}")
     # Don't exit, as patch might already be applied
+  
+  print("Changing directory ...")
+  os.chdir('lammps/src')
   
   if os.path.isfile('fix_imd.cpp'):
     print("Deleting non-functioning files fix_imd ...")
