@@ -140,8 +140,8 @@ void LAMMPSWeb::reallocateBondsData(int newCapacity) {
   float *newBondsDataPosition1 = new float[3 * m_bondsCapacity];
   float *newBondsDataPosition2 = new float[3 * m_bondsCapacity];
   if (copyData) {
-    std::memcpy(m_bondsPosition1, newBondsDataPosition1, oldCapacity*3 * sizeof(float));
-    std::memcpy(m_bondsPosition2, newBondsDataPosition2, oldCapacity*3 * sizeof(float));
+    std::memcpy(newBondsDataPosition1, m_bondsPosition1, oldCapacity*3 * sizeof(float));
+    std::memcpy(newBondsDataPosition2, m_bondsPosition2, oldCapacity*3 * sizeof(float));
     delete m_bondsPosition1;
     delete m_bondsPosition2;
   }
