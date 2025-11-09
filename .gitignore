@@ -1,9 +1,12 @@
 node_modules
 cpp/lammps
 cpp/obj
-/dist
+dist/
 .DS_Store
 cpp/lammps.mjs
 cpp/lammps.wasm
 cpp/lammps.worker.js
 build/
+*.log
+*.tsbuildinfo
+cpp/build_emscripten/
