@@ -20,7 +20,6 @@ async function main() {
     printErr: (msg: string) => console.error("LAMMPS ERROR:", msg),
     wasmBinary: wasmBinary,
     postStepCallback: () => {
-      console.log('callback');
       return false;
     },
   });
@@ -34,7 +33,7 @@ async function main() {
     "units lj",
     "atom_style atomic",
     "lattice fcc 0.8442",
-    "region box block 0 3 0 3 0 3",
+    "region box block 0 20 0 20 0 20",
     "create_box 1 box",
     "create_atoms 1 box",
     "mass 1 1.0",
