@@ -4,6 +4,13 @@ import shutil
 import hashlib
 import sys
 
+# Ensure we're running from the cpp/ directory
+# This allows the script to be called from the root or from cpp/
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if os.getcwd() != script_dir:
+  print(f"Changing directory to: {script_dir}")
+  os.chdir(script_dir)
+
 # Emscripten SDK path - adjust if needed
 EMSDK_PATH = os.environ.get("EMSDK_PATH")
 if not EMSDK_PATH:
