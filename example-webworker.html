@@ -145,6 +145,19 @@
     </ul>
   </div>
 
+  <div style="margin: 20px 0;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px;">
+      <div>
+        <label for="boxSize" style="display: block; margin-bottom: 5px; font-weight: bold;">Box Size (unit cells per dimension):</label>
+        <input type="number" id="boxSize" value="10" min="1" max="50" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+      </div>
+      <div>
+        <label for="timesteps" style="display: block; margin-bottom: 5px; font-weight: bold;">Number of Timesteps:</label>
+        <input type="number" id="timesteps" value="100" min="1" max="100000" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+      </div>
+    </div>
+  </div>
+
   <div class="controls">
     <button id="runBtn">Run Simulation</button>
     <button id="pauseBtn" disabled>Pause</button>
@@ -192,6 +205,8 @@
     const atomCountEl = document.getElementById('atomCount');
     const timestepEl = document.getElementById('timestep');
     const callbackCountEl = document.getElementById('callbackCount');
+    const boxSizeInput = document.getElementById('boxSize');
+    const timestepsInput = document.getElementById('timesteps');
     
     let worker = null;
     let isPaused = false;
@@ -266,6 +281,8 @@
       pauseBtn.disabled = false;
       stepBtn.disabled = false;
       updatePosBtn.disabled = false;
+      boxSizeInput.disabled = true;
+      timestepsInput.disabled = true;
       isRunning = true;
       isPaused = false;
       pauseBtn.textContent = 'Pause';
@@ -275,13 +292,19 @@
       callbackCountEl.textContent = '0';
       
       try {
+        // Get user input values
+        const boxSize = parseInt(boxSizeInput.value);
+        const numTimesteps = parseInt(timestepsInput.value);
+        
         log('📝 Setting up simulation...');
+        log(`   Box size: ${boxSize}x${boxSize}x${boxSize} unit cells`);
+        log(`   Timesteps: ${numTimesteps}\n`);
         
         await worker.runScript(`
           units lj
           atom_style atomic
           lattice fcc 0.8442
-          region box block 0 10 0 10 0 10
+          region box block 0 ${boxSize} 0 ${boxSize} 0 ${boxSize}
           create_box 1 box
           create_atoms 1 box
           mass 1 1.0
@@ -293,13 +316,13 @@
 
         updateStats();
         log(`✅ Created ${worker.getNumAtoms()} atoms\n`);
-        log('🏃 Running 100 timesteps...');
+        log(`🏃 Running ${numTimesteps} timesteps...`);
         log('💡 Try pausing, stepping, or updating positions!\n');
         
         // Start timer
         const startTime = performance.now();
         
-        await worker.runScript('run 100');
+        await worker.runScript(`run ${numTimesteps}`);
         
         const endTime = performance.now();
         const elapsed = ((endTime - startTime) / 1000).toFixed(2);
@@ -307,7 +330,7 @@
         updateStats();
         log(`\n✅ Simulation complete in ${elapsed}s!`);
         log(`   Total callbacks: ${callbackCount}`);
-        log(`   Timesteps/second: ${(100 / parseFloat(elapsed)).toFixed(2)}`);
+        log(`   Timesteps/second: ${(numTimesteps / parseFloat(elapsed)).toFixed(2)}`);
         
         const data = await worker.getData(['memoryUsage']);
         log(`   Memory usage: ${(data.memoryUsage / 1024 / 1024).toFixed(2)} MB`);
@@ -321,6 +344,8 @@
         runBtn.disabled = false;
         pauseBtn.disabled = true;
         stepBtn.disabled = true;
+        boxSizeInput.disabled = false;
+        timestepsInput.disabled = false;
       }
     });
     
