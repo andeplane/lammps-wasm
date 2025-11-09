@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LAMMPS WASM Web Worker Example</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1000px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+    }
+    .controls {
+      margin: 20px 0;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    button.secondary {
+      background: #6c757d;
+    }
+    button.secondary:hover {
+      background: #5a6268;
+    }
+    button.danger {
+      background: #dc3545;
+    }
+    button.danger:hover {
+      background: #c82333;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+    .stat-card {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 5px;
+      border-left: 4px solid #007bff;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: #6c757d;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #333;
+    }
+    #output {
+      background: #f5f5f5;
+      padding: 15px;
+      border-radius: 5px;
+      white-space: pre-wrap;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+      margin-top: 20px;
+    }
+    .output-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .status {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .status.idle {
+      background: #e9ecef;
+      color: #495057;
+    }
+    .status.running {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status.paused {
+      background: #fff3cd;
+      color: #856404;
+    }
+    .log-line {
+      margin: 2px 0;
+    }
+    .log-line.error {
+      color: #dc3545;
+      font-weight: bold;
+    }
+    .info-banner {
+      background: #d1ecf1;
+      border-left: 4px solid #0c5460;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+    }
+    .info-banner h3 {
+      margin-top: 0;
+      color: #0c5460;
+    }
+    .info-banner ul {
+      margin-bottom: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>🚀 LAMMPS WASM Web Worker Example</h1>
+  
+  <div class="info-banner">
+    <h3>Running LAMMPS in a Web Worker with SharedArrayBuffer</h3>
+    <p>This example demonstrates:</p>
+    <ul>
+      <li>Non-blocking simulation execution in a Web Worker</li>
+      <li>Real-time log streaming from worker to main thread</li>
+      <li>Zero-copy data access via SharedArrayBuffer</li>
+      <li>Synchronous pause/resume control with callback signals</li>
+    </ul>
+  </div>
+
+  <div class="controls">
+    <button id="runBtn">Run Simulation</button>
+    <button id="pauseBtn" disabled>Pause</button>
+    <button id="stepBtn" disabled>Single Step</button>
+    <button id="updatePosBtn" disabled>Update Positions</button>
+    <button id="terminateBtn" class="danger" disabled>Terminate Worker</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-label">Status</div>
+      <div class="stat-value"><span class="status idle" id="statusBadge">Idle</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Atoms</div>
+      <div class="stat-value" id="atomCount">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Timestep</div>
+      <div class="stat-value" id="timestep">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Callback Count</div>
+      <div class="stat-value" id="callbackCount">0</div>
+    </div>
+  </div>
+
+  <div class="output-header">
+    <h2>Output Log:</h2>
+    <button id="clearBtn" class="secondary">Clear Log</button>
+  </div>
+  <div id="output">Waiting to start...</div>
+
+  <script type="module">
+    import { LammpsWorker } from './dist/worker/index.js';
+
+    const outputDiv = document.getElementById('output');
+    const runBtn = document.getElementById('runBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const stepBtn = document.getElementById('stepBtn');
+    const updatePosBtn = document.getElementById('updatePosBtn');
+    const terminateBtn = document.getElementById('terminateBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const statusBadge = document.getElementById('statusBadge');
+    const atomCountEl = document.getElementById('atomCount');
+    const timestepEl = document.getElementById('timestep');
+    const callbackCountEl = document.getElementById('callbackCount');
+    
+    let worker = null;
+    let isPaused = false;
+    let isRunning = false;
+    let callbackCount = 0;
+
+    function log(msg, isError = false) {
+      const line = document.createElement('div');
+      line.className = 'log-line' + (isError ? ' error' : '');
+      line.textContent = msg;
+      outputDiv.appendChild(line);
+      outputDiv.scrollTop = outputDiv.scrollHeight;
+    }
+
+    function updateStats() {
+      if (!worker) return;
+      
+      const atoms = worker.getNumAtoms();
+      const timestep = worker.getTimesteps();
+      
+      atomCountEl.textContent = atoms.toLocaleString();
+      timestepEl.textContent = timestep.toLocaleString();
+    }
+
+    function setStatus(status) {
+      statusBadge.className = `status ${status}`;
+      statusBadge.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+    }
+
+    async function initWorker() {
+      try {
+        log('🔧 Initializing LAMMPS Worker...');
+        
+        worker = await LammpsWorker.create({
+          workerUrl: './dist/worker/worker-entry.js',
+          initialCapacity: 10000
+        });
+
+        // Set up event listeners
+        worker.on('log', (msg) => {
+          log('LAMMPS: ' + msg);
+        });
+
+        worker.on('error', (msg) => {
+          log('ERROR: ' + msg, true);
+        });
+
+        worker.on('step', (timestep) => {
+          callbackCount++;
+          callbackCountEl.textContent = callbackCount.toLocaleString();
+          updateStats();
+        });
+
+        log('✅ Worker initialized successfully');
+        terminateBtn.disabled = false;
+        
+        return true;
+      } catch (error) {
+        log('❌ Error initializing worker: ' + error.message, true);
+        console.error(error);
+        return false;
+      }
+    }
+
+    runBtn.addEventListener('click', async () => {
+      if (!worker) {
+        const success = await initWorker();
+        if (!success) return;
+      }
+
+      runBtn.disabled = true;
+      pauseBtn.disabled = false;
+      stepBtn.disabled = false;
+      updatePosBtn.disabled = false;
+      isRunning = true;
+      isPaused = false;
+      pauseBtn.textContent = 'Pause';
+      setStatus('running');
+      outputDiv.innerHTML = '';
+      callbackCount = 0;
+      callbackCountEl.textContent = '0';
+      
+      try {
+        log('📝 Setting up simulation...');
+        
+        await worker.runScript(`
+          units lj
+          atom_style atomic
+          lattice fcc 0.8442
+          region box block 0 10 0 10 0 10
+          create_box 1 box
+          create_atoms 1 box
+          mass 1 1.0
+          velocity all create 1.0 87287
+          pair_style lj/cut 2.5
+          pair_coeff 1 1 1.0 1.0 2.5
+          fix 1 all nve
+        `);
+
+        updateStats();
+        log(`✅ Created ${worker.getNumAtoms()} atoms\n`);
+        log('🏃 Running 100 timesteps...');
+        log('💡 Try pausing, stepping, or updating positions!\n');
+        
+        // Start timer
+        const startTime = performance.now();
+        
+        await worker.runScript('run 100');
+        
+        const endTime = performance.now();
+        const elapsed = ((endTime - startTime) / 1000).toFixed(2);
+        
+        updateStats();
+        log(`\n✅ Simulation complete in ${elapsed}s!`);
+        log(`   Total callbacks: ${callbackCount}`);
+        log(`   Timesteps/second: ${(100 / parseFloat(elapsed)).toFixed(2)}`);
+        
+        const data = await worker.getData(['memoryUsage']);
+        log(`   Memory usage: ${(data.memoryUsage / 1024 / 1024).toFixed(2)} MB`);
+        
+      } catch (error) {
+        log('❌ Error: ' + error.message, true);
+        console.error(error);
+      } finally {
+        isRunning = false;
+        setStatus('idle');
+        runBtn.disabled = false;
+        pauseBtn.disabled = true;
+        stepBtn.disabled = true;
+      }
+    });
+    
+    pauseBtn.addEventListener('click', async () => {
+      isPaused = !isPaused;
+      
+      try {
+        if (isPaused) {
+          await worker.pause();
+          pauseBtn.textContent = 'Resume';
+          setStatus('paused');
+          log('\n⏸️  Paused');
+        } else {
+          await worker.resume();
+          pauseBtn.textContent = 'Pause';
+          setStatus('running');
+          log('▶️  Resumed\n');
+        }
+      } catch (error) {
+        log('❌ Error toggling pause: ' + error.message, true);
+      }
+    });
+
+    stepBtn.addEventListener('click', async () => {
+      try {
+        log('⏭️  Stepping...');
+        await worker.step();
+        updateStats();
+        log(`   Current timestep: ${worker.getTimesteps()}`);
+      } catch (error) {
+        log('❌ Error stepping: ' + error.message, true);
+      }
+    });
+
+    updatePosBtn.addEventListener('click', async () => {
+      try {
+        log('🔄 Updating positions...');
+        await worker.updatePositions();
+        const positions = worker.getPositions();
+        const numAtoms = worker.getNumAtoms();
+        
+        log(`✅ Updated positions for ${numAtoms} atoms`);
+        if (numAtoms > 0) {
+          const numToShow = Math.min(10, numAtoms);
+          for (let i = 0; i < numToShow; i++) {
+            const x = positions[i * 3 + 0].toFixed(3);
+            const y = positions[i * 3 + 1].toFixed(3);
+            const z = positions[i * 3 + 2].toFixed(3);
+            log(`   Atom ${i}: [${x}, ${y}, ${z}]`);
+          }
+        }
+      } catch (error) {
+        log('❌ Error updating positions: ' + error.message, true);
+      }
+    });
+
+    terminateBtn.addEventListener('click', () => {
+      if (worker) {
+        worker.terminate();
+        worker = null;
+        log('🛑 Worker terminated');
+        setStatus('idle');
+        runBtn.disabled = false;
+        pauseBtn.disabled = true;
+        stepBtn.disabled = true;
+        updatePosBtn.disabled = true;
+        terminateBtn.disabled = true;
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      outputDiv.innerHTML = '';
+    });
+
+    // Update stats periodically
+    setInterval(() => {
+      if (worker && isRunning) {
+        updateStats();
+      }
+    }, 100);
+  </script>
+</body>
+</html>
+
