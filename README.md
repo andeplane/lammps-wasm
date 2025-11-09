@@ -17,24 +17,30 @@ import { LammpsWeb } from "lammps";
 const lammps = await LammpsWeb.create({
   print: (msg) => console.log(msg),
   printErr: (msg) => console.error(msg),
+  postStepCallback: () => {
+    // Called after each simulation step
+    // Return false to continue, true to pause
+    console.log("Step:", lammps.getTimesteps());
+    return false;
+  },
 });
 
 // Run LAMMPS commands
-lammps.runCommand("units lj");
-lammps.runCommand("atom_style atomic");
-lammps.runCommand("lattice fcc 0.8442");
-lammps.runCommand("region box block 0 4 0 4 0 4");
-lammps.runCommand("create_box 1 box");
-lammps.runCommand("create_atoms 1 box");
+lammps.runScript(`
+  units lj
+  atom_style atomic
+  lattice fcc 0.8442
+  region box block 0 4 0 4 0 4
+  create_box 1 box
+  create_atoms 1 box
+`);
 
 // Get system information
 console.log("Number of atoms:", lammps.getNumAtoms());
 console.log("Timesteps:", lammps.getTimesteps());
 
 // Control simulation
-lammps.start();
 lammps.step();
-lammps.stop();
 ```
 
 ## API Reference
@@ -52,6 +58,7 @@ Creates a new LAMMPS instance.
 **Parameters:**
 - `options.print?: (msg: string) => void` - Callback for standard output
 - `options.printErr?: (msg: string) => void` - Callback for error output
+- `options.postStepCallback?: () => boolean` - Callback invoked after each simulation step. Return `false` to continue simulation, `true` to pause.
 
 **Returns:** `Promise<LammpsWeb>`
 
@@ -60,6 +67,11 @@ Creates a new LAMMPS instance.
 const lammps = await LammpsWeb.create({
   print: (msg) => console.log(msg),
   printErr: (msg) => console.error(msg),
+  postStepCallback: () => {
+    // Called after each simulation step
+    // Return false to continue, true to pause
+    return false;
+  },
 });
 ```
 
@@ -67,7 +79,7 @@ const lammps = await LammpsWeb.create({
 
 ##### Simulation Control
 
-- `runCommand(command: string): void` - Execute a LAMMPS command
+- `runScript(script: string): void` - Execute LAMMPS commands (single or multi-line)
 - `runFile(path: string): void` - Execute commands from a file
 - `start(): boolean` - Start the simulation
 - `stop(): boolean` - Stop the simulation
@@ -195,19 +207,20 @@ const lammps = await LammpsWeb.create({
   print: (msg) => console.log(msg),
 });
 
-// Setup
-lammps.runCommand("units lj");
-lammps.runCommand("atom_style atomic");
-lammps.runCommand("lattice fcc 0.8442");
-lammps.runCommand("region box block 0 10 0 10 0 10");
-lammps.runCommand("create_box 1 box");
-lammps.runCommand("create_atoms 1 box");
-lammps.runCommand("mass 1 1.0");
-lammps.runCommand("pair_style lj/cut 2.5");
-lammps.runCommand("pair_coeff 1 1 1.0 1.0 2.5");
-
-// Run simulation
-lammps.runCommand("run 1000");
+// Setup and run simulation
+lammps.runScript(`
+  units lj
+  atom_style atomic
+  lattice fcc 0.8442
+  region box block 0 10 0 10 0 10
+  create_box 1 box
+  create_atoms 1 box
+  mass 1 1.0
+  pair_style lj/cut 2.5
+  pair_coeff 1 1 1.0 1.0 2.5
+  
+  run 1000
+`);
 
 console.log(`Simulated ${lammps.getNumAtoms()} atoms`);
 ```
@@ -219,9 +232,11 @@ import { LammpsWeb } from "lammps";
 
 const lammps = await LammpsWeb.create();
 
-// Setup system...
-lammps.runCommand("compute myTemp all temp");
-lammps.runCommand("compute myPE all pe");
+// Setup system and define computes
+lammps.runScript(`
+  compute myTemp all temp
+  compute myPE all pe
+`);
 
 // Sync computes
 lammps.syncComputes();
@@ -232,6 +247,50 @@ console.log("Temperature:", temp.getScalarValue());
 
 const pe = lammps.getCompute("myPE");
 console.log("Potential Energy:", pe.getScalarValue());
+```
+
+### Using Step Callbacks
+
+Monitor your simulation progress or update UI by using the `postStepCallback`:
+
+```typescript
+import { LammpsWeb } from "lammps";
+
+let stepCount = 0;
+
+const lammps = await LammpsWeb.create({
+  postStepCallback: () => {
+    stepCount++;
+    
+    // Update progress every 100 steps
+    if (stepCount % 100 === 0) {
+      console.log(`Completed ${stepCount} steps`);
+      console.log(`Current timestep: ${lammps.getTimesteps()}`);
+      console.log(`Atoms: ${lammps.getNumAtoms()}`);
+    }
+    
+    // Return false to continue, true to pause
+    // For example, pause after 1000 steps:
+    if (stepCount >= 1000) {
+      console.log("Reached 1000 steps, pausing...");
+      return true;
+    }
+    
+    return false;
+  },
+});
+
+// Setup and run simulation
+lammps.runScript(`
+  units lj
+  atom_style atomic
+  lattice fcc 0.8442
+  region box block 0 10 0 10 0 10
+  create_box 1 box
+  create_atoms 1 box
+  
+  run 2000
+`);
 ```
 
 ## Building from Source

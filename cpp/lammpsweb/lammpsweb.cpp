@@ -60,6 +60,12 @@ LAMMPSWeb::LAMMPSWeb() :
 
 }
 
+void LAMMPSWeb::throwErrorIfNotInitialized(const std::string& operation) const {
+  if (!m_lmp) {
+    throw std::runtime_error("LAMMPS is not initialized. Call start() before " + operation + ".");
+  }
+}
+
 LAMMPSWeb::~LAMMPSWeb() {
   delete[] m_cellMatrix;
   delete[] m_origo;
@@ -71,6 +77,9 @@ LAMMPSWeb::~LAMMPSWeb() {
 }
 
 void LAMMPSWeb::cancel() {
+  if (!m_lmp) {
+    return;
+  }
   LAMMPS_NS::FixAtomify *fixAtomify = dynamic_cast<LAMMPS_NS::FixAtomify*>(findFixByIdentifier("atomify"));
   if(!fixAtomify) {
       return;
@@ -141,6 +150,7 @@ void LAMMPSWeb::reallocateBondsData(int newCapacity) {
 }
 
 int LAMMPSWeb::computeParticles() {
+  throwErrorIfNotInitialized("computing particles");
   LAMMPS_NS::Atom *atom = m_lmp->atom;
   LAMMPS_NS::Domain *domain = m_lmp->domain;
 
@@ -172,6 +182,7 @@ int LAMMPSWeb::computeParticles() {
 }
 
 int LAMMPSWeb::computeBonds() {
+  throwErrorIfNotInitialized("computing bonds");
   m_numBonds = 0;
   computeBondsFromBondList();
   computeBondsFromNeighborlist();
@@ -179,6 +190,9 @@ int LAMMPSWeb::computeBonds() {
 }
 
 void LAMMPSWeb::computeBondsFromBondList() {
+  if (!m_lmp) {
+    return;
+  }
   LAMMPS_NS::Atom *atom = m_lmp->atom;
   LAMMPS_NS::Domain *domain = m_lmp->domain;
   if(atom->nbonds==0) return;
@@ -236,6 +250,9 @@ void LAMMPSWeb::computeBondsFromBondList() {
 }
 
 void LAMMPSWeb::computeBondsFromNeighborlist() {
+  if (!m_lmp) {
+    return;
+  }
   LAMMPS_NS::FixAtomify *fixAtomify = dynamic_cast<LAMMPS_NS::FixAtomify*>(findFixByIdentifier("atomify"));
   if(!fixAtomify) {
       return;
@@ -313,6 +330,7 @@ long LAMMPSWeb::getBondsPosition2Pointer() {
 }
 
 long LAMMPSWeb::getCellMatrixPointer() {
+  throwErrorIfNotInitialized("accessing cell matrix");
   LAMMPS_NS::Domain *domain = m_lmp->domain;
   domain->box_corners();
   double a[] = {domain->corners[1][0], domain->corners[1][1], domain->corners[1][2]};
@@ -333,6 +351,7 @@ long LAMMPSWeb::getCellMatrixPointer() {
 }
 
 long LAMMPSWeb::getOrigoPointer() {
+  throwErrorIfNotInitialized("accessing origin");
   LAMMPS_NS::Domain *domain = m_lmp->domain;
   domain->box_corners();
   m_origo[0] = domain->corners[0][0];
@@ -343,6 +362,9 @@ long LAMMPSWeb::getOrigoPointer() {
 }
 
 bool LAMMPSWeb::getIsRunning() {
+  if (!m_lmp) {
+    return false;
+  }
   return m_lmp->update->whichflag!=0;
 }
 
@@ -416,6 +438,7 @@ int LAMMPSWeb::getRunTimesteps() {
 }
 
 void LAMMPSWeb::syncComputes() {
+  throwErrorIfNotInitialized("syncing computes");
   // First add all existing computes
   for(int i=0; i < m_lmp->modify->ncompute; i++) {
     LAMMPS_NS::Compute *lmpCompute = m_lmp->modify->compute[i];
@@ -446,6 +469,7 @@ void LAMMPSWeb::syncComputes() {
 }
 
 void LAMMPSWeb::syncFixes() {
+  throwErrorIfNotInitialized("syncing fixes");
   // First add all existing fixes
   for(int i=0; i < m_lmp->modify->nfix; i++) {
     LAMMPS_NS::Fix *lmpFix = m_lmp->modify->fix[i];
@@ -472,6 +496,7 @@ void LAMMPSWeb::syncFixes() {
 }
 
 void LAMMPSWeb::syncVariables() {
+  throwErrorIfNotInitialized("syncing variables");
   LAMMPS_NS::Variable *variable = reinterpret_cast<LAMMPS_NS::Variable*>(m_lmp->input->variable);
   
   int nvar;
@@ -543,6 +568,7 @@ std::vector<std::string> LAMMPSWeb::getFixNames() {
 }
 
 void LAMMPSWeb::setSyncFrequency(int every) {
+  throwErrorIfNotInitialized("setting sync frequency");
   LAMMPS_NS::Fix *originalFix = findFixByIdentifier(std::string("atomify"));
   if (!originalFix) {
     return;
@@ -578,12 +604,14 @@ long LAMMPSWeb::getPositionsPointer() {
 }
 
 long LAMMPSWeb::getIdPointer() {
+  throwErrorIfNotInitialized("accessing atom IDs");
   auto ptr = lammps_extract_atom((void *)m_lmp, "id");
 
   return reinterpret_cast<long>(ptr);
 }
 
 long LAMMPSWeb::getTypePointer() {
+  throwErrorIfNotInitialized("accessing atom types");
   auto ptr = lammps_extract_atom((void *)m_lmp, "type");
 
   return reinterpret_cast<long>(ptr);
@@ -665,15 +693,18 @@ void LAMMPSWeb::stop() {
 }
 
 void LAMMPSWeb::runFile(std::string path) {
+  throwErrorIfNotInitialized("running commands");
   lammps_file((void*)m_lmp, path.c_str());
 }
 
 
 void LAMMPSWeb::step() {
+  throwErrorIfNotInitialized("stepping");
   const char *script = "run 1 pre no post no\n";
   lammps_commands_string((void *)m_lmp, script);
 }
 
-void LAMMPSWeb::runCommand(std::string command) {
-  lammps_commands_string((void *)m_lmp, command.c_str());
+void LAMMPSWeb::runScript(std::string script) {
+  throwErrorIfNotInitialized("running script");
+  lammps_commands_string((void *)m_lmp, script.c_str());
 }

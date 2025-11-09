@@ -36,6 +36,8 @@ private:
   int m_numBonds;
   bool m_buildNeighborlist;
   
+  void throwErrorIfNotInitialized(const std::string& operation) const;
+  
 public:
   LAMMPSWeb();
   ~LAMMPSWeb();
@@ -83,7 +85,7 @@ public:
   void start();
   void stop();
   void runFile(std::string path);
-  void runCommand(std::string command);
+  void runScript(std::string script);
   
   void synchronizeLAMMPS(int mode);
   void syncComputes();
@@ -142,7 +144,7 @@ EMSCRIPTEN_BINDINGS(LAMMPSWeb)
     .function("stop", &LAMMPSWeb::stop)
     .function("getNumAtoms", &LAMMPSWeb::getNumAtoms)
     .function("runFile", &LAMMPSWeb::runFile)
-    .function("runCommand", &LAMMPSWeb::runCommand)
+    .function("runScript", &LAMMPSWeb::runScript)
     
     .function("computeBonds", &LAMMPSWeb::computeBonds)
     .function("computeParticles", &LAMMPSWeb::computeParticles);

@@ -29,28 +29,23 @@ async function main() {
   // Run LAMMPS commands
   console.log("📝 Setting up simulation...");
   
-  const commands = [
-    "units lj",
-    "atom_style atomic",
-    "lattice fcc 0.8442",
-    "region box block 0 20 0 20 0 20",
-    "create_box 1 box",
-    "create_atoms 1 box",
-    "mass 1 1.0",
-    "pair_style lj/cut 2.5",
-    "pair_coeff 1 1 1.0 1.0 2.5",
-  ];
-
-  for (const cmd of commands) {
-    console.log(`  Running: ${cmd}`);
-    lammps.runCommand(cmd);
-  }
+  lammps.runScript(`
+    units lj
+    atom_style atomic
+    lattice fcc 0.8442
+    region box block 0 20 0 20 0 20
+    create_box 1 box
+    create_atoms 1 box
+    mass 1 1.0
+    pair_style lj/cut 2.5
+    pair_coeff 1 1 1.0 1.0 2.5
+  `);
 
   console.log(`\n✅ Created ${lammps.getNumAtoms()} atoms\n`);
 
   // Run simulation
   console.log("🏃 Running 100 timesteps...");
-  lammps.runCommand("run 100");
+  lammps.runScript("run 100");
 
   // Get final stats  
   console.log("\n📊 Simulation Statistics:");
