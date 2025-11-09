@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LAMMPS WASM Example</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    #output {
+      background: #f5f5f5;
+      padding: 15px;
+      border-radius: 5px;
+      white-space: pre-wrap;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 LAMMPS WASM Example</h1>
+  <p>Simple LJ simulation running in your browser</p>
+  
+  <button id="runBtn">Run Simulation</button>
+  
+  <h2>Output:</h2>
+  <div id="output">Click "Run Simulation" to start...</div>
+
+  <script type="module">
+    import { LammpsWeb } from './dist/index.js';
+
+    const outputDiv = document.getElementById('output');
+    const runBtn = document.getElementById('runBtn');
+    
+    function log(msg) {
+      outputDiv.textContent += msg + '\n';
+      outputDiv.scrollTop = outputDiv.scrollHeight;
+    }
+
+    runBtn.addEventListener('click', async () => {
+      runBtn.disabled = true;
+      outputDiv.textContent = '';
+      
+      try {
+        log('🚀 Initializing LAMMPS...');
+        
+        const lammps = await LammpsWeb.create({
+          print: (msg) => log('LAMMPS: ' + msg),
+          printErr: (msg) => log('ERROR: ' + msg),
+        });
+
+        log('✅ LAMMPS initialized successfully\n');
+        log('📝 Setting up simulation...');
+        
+        const commands = [
+          'units lj',
+          'atom_style atomic',
+          'lattice fcc 0.8442',
+          'region box block 0 3 0 3 0 3',
+          'create_box 1 box',
+          'create_atoms 1 box',
+          'mass 1 1.0',
+          'pair_style lj/cut 2.5',
+          'pair_coeff 1 1 1.0 1.0 2.5',
+        ];
+
+        for (const cmd of commands) {
+          log(`  Running: ${cmd}`);
+          lammps.runCommand(cmd);
+        }
+
+        log(`\n✅ Created ${lammps.getNumAtoms()} atoms\n`);
+        log('🏃 Running 100 timesteps...');
+        
+        lammps.runCommand('run 100');
+
+        log('\n📊 Simulation Statistics:');
+        log(`  Total atoms: ${lammps.getNumAtoms()}`);
+        log(`  Timesteps: ${lammps.getTimesteps()}`);
+        log(`  Memory usage: ${(lammps.getMemoryUsage() / 1024 / 1024).toFixed(2)} MB`);
+        log('\n✅ Simulation complete!');
+        
+      } catch (error) {
+        log('❌ Error: ' + error.message);
+        console.error(error);
+      } finally {
+        runBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
+
