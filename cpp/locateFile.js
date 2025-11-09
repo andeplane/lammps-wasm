@@ -1,6 +1,6 @@
-// Allow user to override locateFile, otherwise just return the path
+// Allow user to override locateFile, otherwise use scriptDirectory
 if (!Module["locateFile"]) {
-  Module["locateFile"] = (path, scriptDirectory_unused) => {
-    return path;
+  Module["locateFile"] = (path, scriptDirectory) => {
+    return scriptDirectory + path;
   };
 }
