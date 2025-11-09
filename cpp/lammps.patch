@@ -50,6 +50,19 @@ index 949a70d..14b7ffc 100644
    int me;                           // proc ID
    int maxarg;                       // max # of args in arg
    char *line, *copy, *work;         // input line & copy and work string
+diff --git a/src/modify.cpp b/src/modify.cpp
+index 5a125d7..b79f3d4 100644
+--- a/src/modify.cpp
++++ b/src/modify.cpp
+@@ -830,7 +830,7 @@ Fix *Modify::add_fix(int narg, char **arg, int trysuffix)
+   // clang-format off
+   const char *exceptions[] =
+     {"GPU", "OMP", "INTEL", "property/atom", "cmap", "cmap3", "rx", "deprecated", "STORE/KIM",
+-     "amoeba/pitorsion", "amoeba/bitorsion", "DUMMY", nullptr};
++     "amoeba/pitorsion", "amoeba/bitorsion", "DUMMY", "atomify", nullptr};
+   // clang-format on
+ 
+   if (domain->box_exist == 0) {
 diff --git a/src/neigh_request.h b/src/neigh_request.h
 index caa9e05..3dc69e5 100644
 --- a/src/neigh_request.h
