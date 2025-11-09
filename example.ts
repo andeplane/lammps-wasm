@@ -19,6 +19,10 @@ async function main() {
     print: (msg: string) => console.log("LAMMPS:", msg),
     printErr: (msg: string) => console.error("LAMMPS ERROR:", msg),
     wasmBinary: wasmBinary,
+    postStepCallback: () => {
+      console.log('callback');
+      return false;
+    },
   });
 
   console.log("✅ LAMMPS initialized successfully\n");
@@ -47,14 +51,13 @@ async function main() {
 
   // Run simulation
   console.log("🏃 Running 100 timesteps...");
-  await lammps.runCommand("run 100");
+  lammps.runCommand("run 100");
 
   // Get final stats  
   console.log("\n📊 Simulation Statistics:");
-  const numAtoms = await lammps.computeParticles();
-  console.log(`  Total atoms: ${numAtoms}`);
-  console.log(`  Timesteps: ${await lammps.getTimesteps()}`);
-  console.log(`  Memory usage: ${((await lammps.getMemoryUsage()) / 1024 / 1024).toFixed(2)} MB`);
+  console.log(`  Total atoms: ${lammps.getNumAtoms()}`);
+  console.log(`  Timesteps: ${lammps.getTimesteps()}`);
+  console.log(`  Memory usage: ${(lammps.getMemoryUsage() / 1024 / 1024).toFixed(2)} MB`);
 
   console.log("\n✅ Simulation complete!");
 }

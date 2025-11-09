@@ -43,7 +43,10 @@
   <h1>🧪 LAMMPS WASM Example</h1>
   <p>Simple LJ simulation running in your browser</p>
   
-  <button id="runBtn">Run Simulation</button>
+  <div>
+    <button id="runBtn">Run Simulation</button>
+    <button id="pauseBtn" disabled>Pause</button>
+  </div>
   
   <h2>Output:</h2>
   <div id="output">Click "Run Simulation" to start...</div>
@@ -53,15 +56,28 @@
 
     const outputDiv = document.getElementById('output');
     const runBtn = document.getElementById('runBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    
+    let isPaused = false;
     
     function log(msg) {
       outputDiv.textContent += msg + '\n';
       outputDiv.scrollTop = outputDiv.scrollHeight;
     }
+    
+    function sleep(ms) {
+      const start = Date.now();
+      while (Date.now() - start < ms) {
+        // Busy wait
+      }
+    }
 
     runBtn.addEventListener('click', async () => {
       runBtn.disabled = true;
+      pauseBtn.disabled = false;
       outputDiv.textContent = '';
+      isPaused = false;
+      pauseBtn.textContent = 'Pause';
       
       try {
         log('🚀 Initializing LAMMPS...');
@@ -69,6 +85,13 @@
         const lammps = await LammpsWeb.create({
           print: (msg) => log('LAMMPS: ' + msg),
           printErr: (msg) => log('ERROR: ' + msg),
+          postStepCallback: () => {
+            // Block here if paused - C++ will wait!
+            while (isPaused) {
+              sleep(100);
+            }
+            return false;
+          },
         });
 
         log('✅ LAMMPS initialized successfully\n');
@@ -78,7 +101,7 @@
           'units lj',
           'atom_style atomic',
           'lattice fcc 0.8442',
-          'region box block 0 3 0 3 0 3',
+          'region box block 0 20 0 20 0 20',
           'create_box 1 box',
           'create_atoms 1 box',
           'mass 1 1.0',
@@ -92,7 +115,7 @@
         }
 
         log(`\n✅ Created ${lammps.getNumAtoms()} atoms\n`);
-        log('🏃 Running 100 timesteps...');
+        log('🏃 Running 1000 timesteps... (try pausing!)');
         
         lammps.runCommand('run 100');
 
@@ -107,7 +130,16 @@
         console.error(error);
       } finally {
         runBtn.disabled = false;
+        pauseBtn.disabled = true;
+        pauseBtn.textContent = 'Pause';
+        isPaused = false;
       }
+    });
+    
+    pauseBtn.addEventListener('click', () => {
+      isPaused = !isPaused;
+      pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';
+      log(isPaused ? '\n⏸️  Paused' : '\n▶️  Resumed');
     });
   </script>
 </body>
