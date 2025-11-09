@@ -23,7 +23,7 @@ const createModule = createModuleImport as (options?: LammpsModuleOptions) => Pr
  *   printErr: (msg) => console.error(msg)
  * });
  * 
- * lammps.runCommand("units lj");
+ * lammps.runScript("units lj");
  * console.log(lammps.getNumAtoms());
  * ```
  */
@@ -203,8 +203,8 @@ export class LammpsWeb {
     this.instance.setPaused(paused);
   }
 
-  runCommand(command: string): void {
-    this.instance.runCommand(command);
+  runScript(script: string): void {
+    this.instance.runScript(script);
   }
 
   runFile(path: string): void {

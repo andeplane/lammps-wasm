@@ -90,7 +90,7 @@ export type InternalLammpsWeb = {
   start: () => boolean;
   cancel: () => void;
   setPaused: (paused: boolean) => void;
-  runCommand: (command: string) => void;
+  runScript: (script: string) => void;
   runFile: (path: string) => void;
 
   computeBonds: () => number;
