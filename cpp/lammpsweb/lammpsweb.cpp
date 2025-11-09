@@ -347,7 +347,13 @@ bool LAMMPSWeb::getIsRunning() {
 }
 
 int LAMMPSWeb::getNumAtoms() {
-  return lammps_get_natoms((void *)m_lmp);
+  if (!m_lmp) {
+    return 0;
+  }
+  if (!m_lmp->atom) {
+    return 0;
+  }
+  return m_lmp->atom->natoms;
 }
 
 std::string LAMMPSWeb::getErrorMessage() {
@@ -552,17 +558,14 @@ void LAMMPSWeb::setBuildNeighborlist(bool buildNeighborlist) {
 void LAMMPSWeb::synchronizeLAMMPS(int mode) {
 #ifdef __EMSCRIPTEN__
   if(mode == 1000) {
-    // Just a small sleep to not block UI
-    emscripten_sleep(1);
     return;
   }
 
   if(mode != LAMMPS_NS::FixConst::END_OF_STEP && mode != LAMMPS_NS::FixConst::MIN_POST_FORCE) return;
 
-  while (postStepCallback()) { // Returns true if paused
-    emscripten_sleep(100);
-  }
-  emscripten_sleep(1);
+  // Call the JavaScript callback - it can block/sleep as needed for pause functionality
+  // C++ will wait for JS to return (synchronous call in non-Asyncify build)
+  postStepCallback();
 #endif
 }
 
