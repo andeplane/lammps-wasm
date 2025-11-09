@@ -11,6 +11,7 @@ const META_ATOM_COUNT = 0;
 const META_TIMESTEP = 1;
 const META_CAPACITY = 2;
 const META_PAUSE_FLAG = 3;
+const META_RESIZE_FLAG = 4;
 
 interface Message {
   id?: string;
@@ -62,11 +63,33 @@ function updatePositions() {
   const capacity = Atomics.load(metadataBuffer, META_CAPACITY);
 
   if (numAtoms > capacity) {
+    // Set resize flag to prevent concurrent access
+    Atomics.store(metadataBuffer, META_RESIZE_FLAG, 1);
+    
     // Need to resize - notify main thread
     postMessage({
       type: "resize_needed",
       numAtoms,
     });
+    
+    // Wait for resize to complete (main thread will clear flag)
+    while (Atomics.load(metadataBuffer, META_RESIZE_FLAG) === 1) {
+      // Busy wait - could use Atomics.wait but that might block too much
+      const start = Date.now();
+      while (Date.now() - start < 10) {
+        // Short sleep
+      }
+    }
+    
+    // Reload buffer reference after resize
+    // This is set by the init handler when new buffer arrives
+    // For now, just return and let next call use new buffer
+    return;
+  }
+
+  // Check if resize is in progress
+  if (Atomics.load(metadataBuffer, META_RESIZE_FLAG) === 1) {
+    // Resize in progress, skip this update
     return;
   }
 
@@ -137,32 +160,40 @@ const handlers: Record<string, (msg: Message) => void | Promise<void>> = {
       }
       if (msg.positionsBuffer) {
         positionsBuffer = new Float64Array(msg.positionsBuffer);
+        
+        // If this is a resize operation, clear the resize flag
+        if (metadataBuffer && Atomics.load(metadataBuffer, META_RESIZE_FLAG) === 1) {
+          Atomics.store(metadataBuffer, META_RESIZE_FLAG, 0);
+        }
       }
 
-      // We need to initialize LAMMPS manually to get access to the Module
-      // Import the createModule function directly
-      // @ts-ignore - lammps.mjs is generated at build time
-      const createModuleImport = await import("../lammps.mjs");
-      const createModule = createModuleImport.default;
-      
-      // Create the module with our options
-      const module = await createModule({
-        print: (message: string) => sendLog(message),
-        printErr: (message: string) => sendError(message),
-        ...msg.options,
-      });
-      
-      wasmModule = module;
+      // Only initialize LAMMPS if not already initialized
+      if (!lammps) {
+        // We need to initialize LAMMPS manually to get access to the Module
+        // Import the createModule function directly
+        // @ts-ignore - lammps.mjs is generated at build time
+        const createModuleImport = await import("../lammps.mjs");
+        const createModule = createModuleImport.default;
+        
+        // Create the module with our options
+        const module = await createModule({
+          print: (message: string) => sendLog(message),
+          printErr: (message: string) => sendError(message),
+          ...msg.options,
+        });
+        
+        wasmModule = module;
 
-      // Set up global callback
-      (globalThis as any).postStepCallback = postStepCallback;
+        // Set up global callback
+        (globalThis as any).postStepCallback = postStepCallback;
 
-      // Create LAMMPS instance
-      const lammpsInstance = new module.LAMMPSWeb();
-      lammpsInstance.start();
+        // Create LAMMPS instance
+        const lammpsInstance = new module.LAMMPSWeb();
+        lammpsInstance.start();
 
-      // Store the raw LAMMPS instance
-      lammps = lammpsInstance;
+        // Store the raw LAMMPS instance
+        lammps = lammpsInstance;
+      }
 
       sendResponse(msg.id, { success: true });
     } catch (error: any) {

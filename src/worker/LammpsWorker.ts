@@ -5,7 +5,8 @@ const META_ATOM_COUNT = 0;
 const META_TIMESTEP = 1;
 const META_CAPACITY = 2;
 const META_PAUSE_FLAG = 3;
-const META_SIZE = 4; // Total size of metadata buffer
+const META_RESIZE_FLAG = 4;
+const META_SIZE = 5; // Total size of metadata buffer
 
 type EventCallback = (...args: any[]) => void;
 
@@ -91,6 +92,7 @@ export class LammpsWorker {
     Atomics.store(metadataView, META_TIMESTEP, 0);
     Atomics.store(metadataView, META_CAPACITY, initialCapacity);
     Atomics.store(metadataView, META_PAUSE_FLAG, 0);
+    Atomics.store(metadataView, META_RESIZE_FLAG, 0);
 
     // Create instance
     const instance = new LammpsWorker(worker, metadataBuffer, positionsBuffer);
