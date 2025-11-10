@@ -145,9 +145,9 @@ def build_lammps_library(emsdk_env):
   subprocess.run(build_cmd, shell=True, executable="/bin/bash", check=True)
   print("LAMMPS library build complete!")
 
-def link_wasm_module(emsdk_env, debug_mode=False, use_asyncify=False):
+def link_wasm_module(emsdk_env, debug_mode=False):
   """Link the LAMMPS library into a WASM module."""
-  print(f"Linking WASM module (asyncify={'enabled' if use_asyncify else 'disabled'})...")
+  print("Linking WASM module...")
   
   # Find the library files
   lib_path = os.path.join(BUILD_DIR, "liblammps.a")
@@ -184,15 +184,6 @@ def link_wasm_module(emsdk_env, debug_mode=False, use_asyncify=False):
     "-s", "ENVIRONMENT=web,node,worker",
     "-s", "NO_DISABLE_EXCEPTION_CATCHING=1",
     "-s", "ALLOW_MEMORY_GROWTH=1",
-    "-s", "ALLOW_TABLE_GROWTH=1",
-    "-s", "INITIAL_TABLE=1024",
-  ])
-  
-  # Add ASYNCIFY only if requested
-  if use_asyncify:
-    emcc_args.extend(["-s", "ASYNCIFY"])
-  
-  emcc_args.extend([
     "-s", "MODULARIZE=1",
     "-s", "EXPORTED_RUNTIME_METHODS=['getValue','FS','HEAP32','HEAPF32','HEAPF64']",
     "-s", "EXPORT_NAME='createModule'",
@@ -254,6 +245,7 @@ if not os.path.exists('lammps'):
   
   if os.path.isfile('fix_imd.cpp'):
     print("Deleting non-functioning files fix_imd ...")
+    print("Deleting non-functioning files fix_imd ...")
     os.remove('fix_imd.cpp')
     os.remove('fix_imd.h')
   
@@ -297,13 +289,6 @@ if debug_mode:
 else:
   print("Building in RELEASE mode (optimized)...")
 
-# Check if asyncify flag is passed (default is sync mode)
-use_asyncify = "--asyncify" in sys.argv
-if use_asyncify:
-  print("Building WITH Asyncify (async mode)...")
-else:
-  print("Building in synchronous mode (default, optimized for web workers)...")
-
 # Set up Emscripten environment once
 emsdk_env = setup_emscripten()
 
@@ -314,7 +299,7 @@ configure_cmake(emsdk_env, debug_mode=debug_mode)
 build_lammps_library(emsdk_env)
 
 # Link WASM module (lammpsweb files are already in the library)
-link_wasm_module(emsdk_env, debug_mode=debug_mode, use_asyncify=use_asyncify)
+link_wasm_module(emsdk_env, debug_mode=debug_mode)
 
 print("Verifying WASM files were generated ...")
 if not os.path.exists("lammps.wasm"):
