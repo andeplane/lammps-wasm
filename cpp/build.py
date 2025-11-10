@@ -4,6 +4,8 @@ import shutil
 import hashlib
 import sys
 
+LAMMPS_BRANCH = "stable_22Jul2025_update1"
+
 # Ensure we're running from the cpp/ directory
 # This allows the script to be called from the root or from cpp/
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -43,9 +45,9 @@ def copy_moltemplate_files():
 def copy_patch_and_atomify_fix():
   """Copy custom patch file and fix_atomify (not part of standard LAMMPS)."""
   files = [
-    ("lammps.patch", "lammps/src/lammps.patch"),
-    ("lammpsweb/fix_atomify.cpp", "lammps/src/fix_atomify.cpp"),
-    ("lammpsweb/fix_atomify.h", "lammps/src/fix_atomify.h"),
+    # ("lammps.patch", "lammps/src/lammps.patch"),
+    # ("lammpsweb/fix_atomify.cpp", "lammps/src/fix_atomify.cpp"),
+    # ("lammpsweb/fix_atomify.h", "lammps/src/fix_atomify.h"),
   ]
   for src, dst in files:
     if file_content(src) != file_content(dst):
@@ -104,7 +106,7 @@ def configure_cmake(emsdk_env, debug_mode=False):
   package_flags = [f"-DPKG_{pkg}=ON" for pkg in packages]
   
   # Common compiler flags
-  cc_flags_common = "-DLAMMPS_EXCEPTIONS -DLAMMPS_SMALLSMALL -s NO_DISABLE_EXCEPTION_CATCHING=1 -DCOLVARS_LAMMPS"
+  cc_flags_common = "-DLAMMPS_EXCEPTIONS -s NO_DISABLE_EXCEPTION_CATCHING=1 -DCOLVARS_LAMMPS"
   
   if debug_mode:
     # Debug flags
@@ -121,9 +123,10 @@ def configure_cmake(emsdk_env, debug_mode=False):
     f"-DCMAKE_BUILD_TYPE={build_type}",
     "-DCMAKE_CXX_STANDARD=17",
     "-DCMAKE_CXX_STANDARD_REQUIRED=ON",
-    "-DLAMMPS_SIZES=smallsmall",  # Use 32-bit integers (matches Makefile)
+    "-DLAMMPS_SIZES=smallbig",
     "-DBUILD_MPI=OFF",  # Use LAMMPS built-in MPI STUBS for serial build
     "-DDOWNLOAD_VORO=ON",  # Let CMake download and build Voro++ automatically
+    "-DLEPTON_ENABLE_JIT=OFF",  # Disable JIT for WebAssembly (asmjit uses x86-specific code)
     f'-DCMAKE_CXX_FLAGS="{cc_flags}"',
     f'-DCMAKE_C_FLAGS="{cc_flags}"',
   ] + package_flags
@@ -143,9 +146,9 @@ def build_lammps_library(emsdk_env):
   subprocess.run(build_cmd, shell=True, executable="/bin/bash", check=True)
   print("LAMMPS library build complete!")
 
-def link_wasm_module(emsdk_env, debug_mode=False, use_asyncify=False):
+def link_wasm_module(emsdk_env, debug_mode=False):
   """Link the LAMMPS library into a WASM module."""
-  print(f"Linking WASM module (asyncify={'enabled' if use_asyncify else 'disabled'})...")
+  print("Linking WASM module...")
   
   # Find the library files
   lib_path = os.path.join(BUILD_DIR, "liblammps.a")
@@ -182,15 +185,6 @@ def link_wasm_module(emsdk_env, debug_mode=False, use_asyncify=False):
     "-s", "ENVIRONMENT=web,node,worker",
     "-s", "NO_DISABLE_EXCEPTION_CATCHING=1",
     "-s", "ALLOW_MEMORY_GROWTH=1",
-    "-s", "ALLOW_TABLE_GROWTH=1",
-    "-s", "INITIAL_TABLE=1024",
-  ])
-  
-  # Add ASYNCIFY only if requested
-  if use_asyncify:
-    emcc_args.extend(["-s", "ASYNCIFY"])
-  
-  emcc_args.extend([
     "-s", "MODULARIZE=1",
     "-s", "EXPORTED_RUNTIME_METHODS=['getValue','FS','HEAP32','HEAPF32','HEAPF64']",
     "-s", "EXPORT_NAME='createModule'",
@@ -223,7 +217,7 @@ def link_wasm_module(emsdk_env, debug_mode=False, use_asyncify=False):
 if not os.path.exists('lammps'):
   # First clone lammps
   print("Could not find local clone of LAMMPS, cloning ...")
-  subprocess.run("git clone --depth 1 --branch stable_23Jun2022_update1  https://github.com/lammps/lammps.git", shell=True, check=True)
+  subprocess.run(f"git clone --depth 1 --branch {LAMMPS_BRANCH}  https://github.com/lammps/lammps.git", shell=True, check=True)
   
   # Verify lammps directory was created
   if not os.path.exists('lammps'):
@@ -240,16 +234,18 @@ if not os.path.exists('lammps'):
   copy_moltemplate_files()  # Custom pair styles
 
   cwd = os.getcwd()
-  print("Changing directory ...")
-  os.chdir('lammps/src')
   print("Applying patch ...")
   try:
-    subprocess.run("git apply lammps.patch", shell=True, check=True)
+    subprocess.run("cd lammps && git apply ../lammps.patch", shell=True, check=True)
   except subprocess.CalledProcessError as e:
     print(f"WARNING: Patch application failed with exit code {e.returncode}")
     # Don't exit, as patch might already be applied
   
+  print("Changing directory ...")
+  os.chdir('lammps/src')
+  
   if os.path.isfile('fix_imd.cpp'):
+    print("Deleting non-functioning files fix_imd ...")
     print("Deleting non-functioning files fix_imd ...")
     os.remove('fix_imd.cpp')
     os.remove('fix_imd.h')
@@ -294,13 +290,6 @@ if debug_mode:
 else:
   print("Building in RELEASE mode (optimized)...")
 
-# Check if asyncify flag is passed (default is sync mode)
-use_asyncify = "--asyncify" in sys.argv
-if use_asyncify:
-  print("Building WITH Asyncify (async mode)...")
-else:
-  print("Building in synchronous mode (default, optimized for web workers)...")
-
 # Set up Emscripten environment once
 emsdk_env = setup_emscripten()
 
@@ -311,7 +300,7 @@ configure_cmake(emsdk_env, debug_mode=debug_mode)
 build_lammps_library(emsdk_env)
 
 # Link WASM module (lammpsweb files are already in the library)
-link_wasm_module(emsdk_env, debug_mode=debug_mode, use_asyncify=use_asyncify)
+link_wasm_module(emsdk_env, debug_mode=debug_mode)
 
 print("Verifying WASM files were generated ...")
 if not os.path.exists("lammps.wasm"):
